@@ -1,15 +1,13 @@
-const express = require('express');
 const router = require('express-promise-router')();
-
 const PricesController = require('../controllers/prices');
 
-router.route('/')
-    .get(PricesController.getAllPrices)
-    .post(PricesController.newPrice)
-    .delete(PricesController.deleteOldPrices);
+/* Routes corresponding with each task */
+router.post('/new-price', PricesController.newPrice);
+router.post('/update-contract', PricesController.updateContract);
+router.get('/current-prices', PricesController.getCurrentPrices);
 
-router.get('/fresh-avg-prices', PricesController.freshAvgPrices);
 
-router.get('/current-price', PricesController.getCurrentPrice)
+/* In case i want to erase old prices i will request this action */
+router.delete('/clear-db', PricesController.deleteOldPrices);
 
 module.exports = router;
