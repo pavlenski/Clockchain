@@ -1,29 +1,30 @@
 const Price = require('../models/prices');
 const axios = require('axios');
 const timestamp = require('unix-timestamp');
+const pricesService = require('../services/prices');
 
-const ethPriceUrl = 'https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd'
-const fifteenMins = 15 * 60; 
 timestamp.round = true;
 
 module.exports = {
 
-    getAllPrices: async (req, res, next) => {
+    newPrice: async (req, res, next) => {
 
-        const prices = await Price.find({});
-        res.status(200).json(prices);
+        const result = await pricesService.fetchAndAddNewPrice();
+        res.status(201).json({ msg: `price with id: ${result} successfully created` });
+    }, 
+
+    updateContract: async (req, res, next) => {
+
+        const result = await pricesService.updateContract(); 
+        res.status(result.status).json(result.msg);
+    },
+    
+    getCurrentPrices: async (req, res, next) => {
+
+        const data = await pricesService.fetchCurrentPrices();
+        res.status(200).json(data);
     },
 
-    newPrice: async (req, res, next) => {
-        
-        let currentTime = timestamp.now()
-        const newPrice = new Price({ 
-            price: req.body.price, 
-            timestamp: currentTime 
-        });
-        const price = await newPrice.save();
-        res.status(201).json(price);
-    }, 
 
     freshAvgPrices: async (req, res, next) => {
 
@@ -35,11 +36,6 @@ module.exports = {
         res.status(200).json(avgPriceObj);
     },
 
-    getCurrentPrice: async (req, res, next) => {
-
-        const { data } = await axios.get(ethPriceUrl);
-        res.status(200).json(data.ethereum);
-    },
 
     deleteOldPrices: async (req, res, next) => {
 
