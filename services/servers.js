@@ -47,7 +47,6 @@ module.exports = {
             let next = servers.indexOf(globals.serverName) < serverDoc.next ? serverDoc.next - 1 : serverDoc.next;
             next = next >= (serverDoc.total - 1) ? 0 : next; 
             servers = servers.filter(item => item !== globals.serverName); 
-            console.log('fakin servers:', servers, globals.serverName);
 
             await Servers.updateOne(
                 { index: 0 },
@@ -59,7 +58,7 @@ module.exports = {
                     } 
                 }
             );
-            return { msg: `server [${globals.serverName}] disconnected` }
+            return { msg: `Server [${globals.serverName}] disconnected.` }
 
         } catch (error) {
             console.log(error);

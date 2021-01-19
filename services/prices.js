@@ -1,5 +1,6 @@
 const timestamp = require('unix-timestamp');
 const globals = require('../helpers/globals');
+const Server = require('../models/servers');
 const Price = require('../models/prices');
 const axios = require('axios');
 const Web3 = require('web3');
@@ -33,6 +34,37 @@ async function sendTransaction(averagePrice, estimatedGas) {
     return txResult;
 } 
 
+async function isItMyTurn() {
+
+    const serverDoc = await Server.findOne({ index: 0 });
+    console.log('server next', serverDoc.list[serverDoc.next]);
+    console.log('this server', globals.serverName);
+    
+    if(serverDoc.list[serverDoc.next] === globals.serverName) {
+        return true
+    } else {
+        return false
+    }
+}
+
+async function changeTurn() {
+
+    const serverDoc = await Server.findOne({ index: 0 });
+    next = serverDoc.next + 1 >= serverDoc.total ? 0 : serverDoc.next + 1;
+
+    await Server.updateOne(
+        { index: 0 },
+        { $set: { next, } }
+    );
+    console.log(`[${globals.serverName} @ ${currentTimePretty()}]: changed turn.`);
+}
+
+function currentTimePretty() {
+    let now = (timestamp.toDate(timestamp.now()));
+    now = now.toLocaleTimeString();
+    return now;
+}
+
 module.exports = {
     
     fetchCurrentPrices: async () => {
@@ -60,11 +92,18 @@ module.exports = {
         });
         const result = await newPrice.save();
 
-        return { status: 200, msg: `[${globals.serverName}]: price with id: '${result.id}' successfully created` };
+        return { status: 200, msg: `[${globals.serverName} @ ${currentTimePretty()}]: price with id: '${result.id}' successfully created` };
     },
 
     updateContract: async () => {
         
+        const turn = await isItMyTurn();
+        if(turn == false) {
+            return { status: 200, msg: `[${globals.serverName} @ ${currentTimePretty()}]: not my turn yet.` }
+        }
+        
+        await changeTurn();
+
         const lastTimestamp = await contract.methods.getLastSetTimestamp().call();
         const currentTimestamp = timestamp.now();
         if(currentTimestamp - lastTimestamp > globals.fifteenMinutes) {
@@ -76,7 +115,7 @@ module.exports = {
             ]);
 
             if(averagePriceObj === undefined || averagePriceObj.length == 0) {
-                return { status: 404, msg: `[${globals.serverName}]: insufficient data on db, could not calculate avg price`}
+                return { status: 404, msg: `[${globals.serverName} @ ${currentTimePretty()}]: insufficient data on db, could not calculate avg price`}
             }
 
             const averagePrice = Math.floor(averagePriceObj[0].avgPrice);
@@ -85,15 +124,15 @@ module.exports = {
                 const gasEstimate = await contract.methods.setEthPrice(averagePrice).estimateGas({from: globals.walletAddress});
                 const txResponse = await sendTransaction(averagePrice, gasEstimate);
 
-                return { status: 200, msg: `[${globals.serverName}]: successfully created transaction: ${txResponse.transactionHash}` }
+                return { status: 200, msg: `[${globals.serverName} @ ${currentTimePretty()}]: successfully created transaction: ${txResponse.transactionHash}` }
 
             } else {
 
-                return { status: 200, msg: `[${globals.serverName}]: average price has not changed more than 2% of the current contract price` }
+                return { status: 200, msg: `[${globals.serverName} @ ${currentTimePretty()}]: average price has not changed more than 2% of the current contract price` }
             }
         } else {
 
-            return { status: 200, msg: `[${globals.serverName}]: recently updated.. next call will be possible in ${globals.fifteenMinutes - (currentTimestamp - lastTimestamp)} seconds` }
+            return { status: 200, msg: `[${globals.serverName} @ ${currentTimePretty()}]: recently updated.. next call will be possible in ${globals.fifteenMinutes - (currentTimestamp - lastTimestamp)} seconds` }
         }
     },
 
@@ -102,9 +141,9 @@ module.exports = {
         let currentTime = timestamp.now()
         const result = await Price.deleteMany( { timestamp: { $lt: currentTime - globals.fifteenMinutes } } );
         
-        let msg = `[${globals.serverName}]: successfully deleted ${result.deletedCount} old price(s)`;
+        let msg = `[${globals.serverName} @ ${currentTimePretty()}]: successfully deleted ${result.deletedCount} old price(s)`;
         if(result.deletedCount < 1) {
-            msg = `[${globals.serverName}]: all prices are still fresh, none deleted.`
+            msg = `[${globals.serverName} @ ${currentTimePretty()}]: all prices are still fresh, none deleted.`
         }
         return { status: 200, msg }
     }

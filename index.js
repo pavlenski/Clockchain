@@ -71,7 +71,7 @@ function checkArguments() {
 
 /* Create server instance and get it to gracefully close on termination call */
 const PORT = globals.serverPort;
-const server = app.listen(PORT, () => console.log(`[${globals.serverName}] running on:`, PORT));
+const server = app.listen(PORT, () => console.log(`[${globals.serverName}]: running on port [${PORT}]`));
 
 let connections = [];
 
@@ -99,7 +99,7 @@ async function shutDown() {
     console.log(disconnectResult.msg);
 
     server.close(() => {
-        console.log('Closed connections');
+        console.log('Connections closed. Bye');
         process.exit(0);
     });
 
