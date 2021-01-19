@@ -1,7 +1,12 @@
+const { createTerminus } = require('@godaddy/terminus');
+const bodyParser = require('body-parser');
+const mongoose = require('mongoose');
+const globals = require('./helpers/globals');
 const express = require('express');
 const logger = require('morgan');
-const mongoose = require('mongoose');
-const bodyParser = require('body-parser');
+const http = require('http');
+
+checkArguments();
 
 mongoose.connect('mongodb+srv://pavlenski:1234@databricks.8wutx.mongodb.net/ethereum?retryWrites=true&w=majority', {
     useNewUrlParser: true,
@@ -9,7 +14,6 @@ mongoose.connect('mongodb+srv://pavlenski:1234@databricks.8wutx.mongodb.net/ethe
 });
 
 const app = express();
-
 const prices = require('./routes/prices');
 
 /* Middlewares */
@@ -41,6 +45,36 @@ app.use((err, req, res, next) => {
     console.error(err);
 });
 
+function checkArguments() {
+    if(process.argv.length < 6) {
+        console.error(`${6 - process.argv.length} more arguments are required, terminating..`);
+        process.exit(1);
+    } else if(process.argv.length > 6) {
+        console.error(`Too many arguments, you've got ${process.argv.length - 6} extra, terminating..`);
+        process.exit(1);
+    }
+    if(isNaN(process.argv[3])) {
+        console.error(`Port has to be a number, ${process.argv[3]} is not a number, terminating..`);
+        process.exit(1);    
+    }
+}
+
+const server = http.createServer(app);
+
+async function disconnect() {
+    setTimeout(() => {
+        console.log('Disconnected');
+    }, 1000);
+}
+
+const options = {
+    timeout: 5000,
+    onSignal: disconnect
+}
+
 /* Start the server */
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log('Server running on:', PORT));
+const PORT = globals.serverPort;
+server.listen(PORT, () => console.log(`[${globals.serverName}] running on:`, PORT));
+
+
+
