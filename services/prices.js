@@ -40,11 +40,7 @@ async function isItMyTurn() {
     console.log('server next', serverDoc.list[serverDoc.next]);
     console.log('this server', globals.serverName);
     
-    if(serverDoc.list[serverDoc.next] === globals.serverName) {
-        return true
-    } else {
-        return false
-    }
+    return serverDoc.list[serverDoc.next] === globals.serverName
 }
 
 async function changeTurn() {
@@ -101,33 +97,33 @@ module.exports = {
         if(turn == false) {
             return { status: 200, msg: `[${globals.serverName} @ ${currentTimePretty()}]: not my turn yet.` }
         }
-        
-        await changeTurn();
 
         const lastTimestamp = await contract.methods.getLastSetTimestamp().call();
         const currentTimestamp = timestamp.now();
         if(currentTimestamp - lastTimestamp > globals.fifteenMinutes) {
 
-            const contractPrice = await contract.methods.getPrice().call();
             const averagePriceObj = await Price.aggregate([
                 { $match: { timestamp: { $gt: currentTimestamp - globals.fifteenMinutes } } },
                 { $group: { _id: null, avgPrice: { $avg: '$price' } } }
             ]);
-
+            
             if(averagePriceObj === undefined || averagePriceObj.length == 0) {
                 return { status: 404, msg: `[${globals.serverName} @ ${currentTimePretty()}]: insufficient data on db, could not calculate avg price`}
             }
-
+            
+            const contractPrice = await contract.methods.getPrice().call();
             const averagePrice = Math.floor(averagePriceObj[0].avgPrice);
             if(averagePrice > (contractPrice * 1.02) || averagePrice < (contractPrice * 0.98)) {
 
                 const gasEstimate = await contract.methods.setEthPrice(averagePrice).estimateGas({from: globals.walletAddress});
                 const txResponse = await sendTransaction(averagePrice, gasEstimate);
+                await changeTurn();
 
                 return { status: 200, msg: `[${globals.serverName} @ ${currentTimePretty()}]: successfully created transaction: ${txResponse.transactionHash}` }
 
             } else {
-
+                
+                await changeTurn();
                 return { status: 200, msg: `[${globals.serverName} @ ${currentTimePretty()}]: average price has not changed more than 2% of the current contract price` }
             }
         } else {
