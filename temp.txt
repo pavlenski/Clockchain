@@ -4,3 +4,7 @@ pavle.galantic.eth.privatekey = '79dfd001697d11a1723aae40474b84acc50ca9058f99e03
 
 pavle.galantic.eth.test.address = '0xB732328cB6c99DFB45e9a22118e04B831DE3921f'
 pavle.galantic.eth.test.privateKey = '66a873f750839602bc802b0257065aac72f9714c00a5bcd5c494bafdc8e51d22'
+
+
+pavle.galantic.eth.test2.address = '0x3F5C28704EA6A7A0269C7709622c61938Ea52431'
+pavle.galantic.eth.test2.privateKey = '458c6ee36e1df81e4ce5c8770f1a4f4fa5e5e3516b13e96ce4ed56a98b931c07'

@@ -37,8 +37,6 @@ async function sendTransaction(averagePrice, estimatedGas) {
 async function isItMyTurn() {
 
     const serverDoc = await Server.findOne({ index: 0 });
-    console.log('server next', serverDoc.list[serverDoc.next]);
-    console.log('this server', globals.serverName);
     
     return serverDoc.list[serverDoc.next] === globals.serverName
 }
