@@ -1,6 +1,6 @@
-# RW-3000
+# Clockchain
 
-This is a small ethereum blockchain project written in NodeJs. It uses the Express and Web3 framework/library to read and write data to a certain contract on the Kovan test network. Cron jobs are responsible for the API calls
+This is a small ethereum blockchain project written in NodeJs. It uses the Express and Web3 framework/library to read and write data to a certain contract on the Kovan test network. Cron jobs will be responsible for the API calls.
 
 ## Starting a server
 
