@@ -1,5 +1,5 @@
 const timestamp = require('unix-timestamp');
-const globals = require('../helpers/globals');
+const globals = require('../utils/globals');
 const Server = require('../models/servers');
 const Price = require('../models/prices');
 const axios = require('axios');
@@ -30,14 +30,12 @@ async function sendTransaction(averagePrice, estimatedGas) {
     const raw = '0x' + serializedTx.toString('hex');
 
     const txResult = await web3.eth.sendSignedTransaction(raw);
-
     return txResult;
 } 
 
 async function isItMyTurn() {
 
     const serverDoc = await Server.findOne({ index: 0 });
-    
     return serverDoc.list[serverDoc.next] === globals.serverName
 }
 
@@ -55,8 +53,7 @@ async function changeTurn() {
 
 function currentTimePretty() {
     let now = (timestamp.toDate(timestamp.now()));
-    now = now.toLocaleTimeString();
-    return now;
+    return now.toLocaleTimeString();
 }
 
 module.exports = {
@@ -91,43 +88,53 @@ module.exports = {
 
     updateContract: async () => {
         
+        /* 
+         * Check if its the servers turn to writeContract 
+         */
         const turn = await isItMyTurn();
         if(turn == false) {
             return { status: 200, msg: `[${globals.serverName} @ ${currentTimePretty()}]: not my turn yet.` }
         }
 
+        /* 
+         * Check if 15 minutes passed since the last writeContract call 
+         */
         const lastTimestamp = await contract.methods.getLastSetTimestamp().call();
         const currentTimestamp = timestamp.now();
-        if(currentTimestamp - lastTimestamp > globals.fifteenMinutes) {
-
-            const averagePriceObj = await Price.aggregate([
-                { $match: { timestamp: { $gt: currentTimestamp - globals.fifteenMinutes } } },
-                { $group: { _id: null, avgPrice: { $avg: '$price' } } }
-            ]);
-            
-            if(averagePriceObj === undefined || averagePriceObj.length == 0) {
-                return { status: 404, msg: `[${globals.serverName} @ ${currentTimePretty()}]: insufficient data on db, could not calculate avg price`}
-            }
-            
-            const contractPrice = await contract.methods.getPrice().call();
-            const averagePrice = Math.floor(averagePriceObj[0].avgPrice);
-            if(averagePrice > (contractPrice * 1.02) || averagePrice < (contractPrice * 0.98)) {
-
-                const gasEstimate = await contract.methods.setEthPrice(averagePrice).estimateGas({from: globals.walletAddress});
-                const txResponse = await sendTransaction(averagePrice, gasEstimate);
-                await changeTurn();
-
-                return { status: 200, msg: `[${globals.serverName} @ ${currentTimePretty()}]: successfully created transaction: ${txResponse.transactionHash}` }
-
-            } else {
-                
-                await changeTurn();
-                return { status: 200, msg: `[${globals.serverName} @ ${currentTimePretty()}]: average price has not changed more than 2% of the current contract price` }
-            }
-        } else {
-
+        if(currentTimestamp - lastTimestamp < globals.fifteenMinutes) {
             return { status: 200, msg: `[${globals.serverName} @ ${currentTimePretty()}]: recently updated.. next call will be possible in ${globals.fifteenMinutes - (currentTimestamp - lastTimestamp)} seconds` }
         }
+
+        /* 
+         * Check if there is enough data on the db to calculate the average price 
+         */
+        const averagePriceObj = await Price.aggregate([
+            { $match: { timestamp: { $gt: currentTimestamp - globals.fifteenMinutes } } },
+            { $group: { _id: null, avgPrice: { $avg: '$price' } } }
+        ]);
+        if(averagePriceObj === undefined || averagePriceObj.length == 0) {
+            return { status: 404, msg: `[${globals.serverName} @ ${currentTimePretty()}]: insufficient data on db, could not calculate avg price`}
+        }
+        
+        /* 
+         * Check if the price jumped or lowered by 2% from the current contract price
+         */
+        const contractPrice = await contract.methods.getPrice().call();
+        const averagePrice = Math.floor(averagePriceObj[0].avgPrice);
+        if(averagePrice < (contractPrice * 1.02) && averagePrice > (contractPrice * 0.98)) {
+            await changeTurn();
+            return { status: 200, msg: `[${globals.serverName} @ ${currentTimePretty()}]: average price has not changed more than 2% of the current contract price` }
+        }
+
+        /* 
+         * Send transaction
+         */
+        const gasEstimate = await contract.methods.setEthPrice(averagePrice).estimateGas({from: globals.walletAddress});
+        const txResponse = await sendTransaction(averagePrice, gasEstimate);
+        await changeTurn();
+
+        return { status: 200, msg: `[${globals.serverName} @ ${currentTimePretty()}]: successfully created transaction: ${txResponse.transactionHash}` }
+
     },
 
     deleteOldPrices: async () => {

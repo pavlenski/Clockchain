@@ -1,5 +1,17 @@
 const Servers = require('../models/servers');
-const globals = require('../helpers/globals');
+const globals = require('../utils/globals');
+
+function checkServerName(serverList) {
+
+    let isUsed = false;
+    serverList.forEach( item => {
+        if(item === globals.serverName){
+            isUsed = true;
+        }
+    });
+
+    return isUsed;
+}
 
 module.exports = {
 
@@ -18,8 +30,20 @@ module.exports = {
     registerServer: async () => {
         
         try {
+            let response = {
+                err: null,
+                msg: `[${globals.serverName}]: registered`
+            };
+            
             const serverDoc = await Servers.findOne({ index: 0 });
             let servers = serverDoc.list;
+            
+            if(checkServerName(servers)) {
+                response.err = 'SERVER ALREADY EXISTING'
+                response.msg = `Server with name ${globals.serverName} already exisits, terminating..`
+                return response;
+            }
+
             servers.push(globals.serverName);
 
             await Servers.updateOne(
@@ -32,7 +56,7 @@ module.exports = {
                     } 
                 }
             );
-            return { msg: `[${globals.serverName}]: registered` }    
+            return response   
 
         } catch (error) {
             console.log(error);
