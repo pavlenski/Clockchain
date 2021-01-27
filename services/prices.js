@@ -10,6 +10,8 @@ const web3 = new Web3(globals.providerURL);
 const contract = new web3.eth.Contract(globals.contractABI, globals.contractID)
 timestamp.round = true;
 
+let gatheredPrices = [];
+
 async function sendTransaction(averagePrice, estimatedGas) {
     
     const tempPrivateKey = Buffer.from(globals.privateKeyHash, 'hex'); 
@@ -56,6 +58,18 @@ function currentTimePretty() {
     return now.toLocaleTimeString();
 }
 
+function calculateAveragePrice() {
+
+    let sum = 0.0;
+    gatheredPrices.forEach( item => sum += item );
+    let result = sum / gatheredPrices.length;
+    return result;
+}
+
+function clearGatheredPrices() {
+    gatheredPrices = [];
+}
+
 module.exports = {
     
     fetchCurrentPrices: async () => {
@@ -71,34 +85,49 @@ module.exports = {
             }
         };
         return returnData;
+
     },
 
     fetchAndAddNewPrice: async () => {
 
-        const { data } = await axios.get(globals.ethereumPriceURL);
-        const currentTime = timestamp.now();
-        let newPrice = Price({
-            price: data.ethereum.usd,
-            timestamp: currentTime
-        });
-        const result = await newPrice.save();
+        /* 
+            Not saving prices remotely anymore, now i keep them in memory
+            until updateContract is called and can be executed.
+        */
+       /* 
+            Old way of saving prices remotely
+       */
+        // const currentTime = timestamp.now();
+        // let newPrice = Price({
+        //     price: data.ethereum.usd,
+        //     timestamp: currentTime
+        // });
+        // const result = await newPrice.save();
+        
+        /* 
+            The old return obj 
+        */
+        // return { status: 200, msg: `[${globals.serverName} @ ${currentTimePretty()}]: price with id: '${result.id}' successfully created` };
 
-        return { status: 200, msg: `[${globals.serverName} @ ${currentTimePretty()}]: price with id: '${result.id}' successfully created` };
+        const { data } = await axios.get(globals.ethereumPriceURL);
+        gatheredPrices.push(data.ethereum.usd);
+    
+        return { status: 200, msg: `[${globals.serverName} @ ${currentTimePretty()}]: price of ethereum (${data.ethereum.usd}) in usd saved` };
     },
 
     updateContract: async () => {
         
         /* 
-         * Check if its the servers turn to writeContract 
-         */
+            Check if its the servers turn to writeContract 
+        */
         const turn = await isItMyTurn();
         if(turn == false) {
             return { status: 200, msg: `[${globals.serverName} @ ${currentTimePretty()}]: not my turn yet.` }
         }
 
         /* 
-         * Check if 15 minutes passed since the last writeContract call 
-         */
+            Check if 15 minutes passed since the last writeContract call 
+        */
         const lastTimestamp = await contract.methods.getLastSetTimestamp().call();
         const currentTimestamp = timestamp.now();
         if(currentTimestamp - lastTimestamp < globals.fifteenMinutes) {
@@ -106,29 +135,52 @@ module.exports = {
         }
 
         /* 
-         * Check if there is enough data on the db to calculate the average price 
-         */
-        const averagePriceObj = await Price.aggregate([
-            { $match: { timestamp: { $gt: currentTimestamp - globals.fifteenMinutes } } },
-            { $group: { _id: null, avgPrice: { $avg: '$price' } } }
-        ]);
-        if(averagePriceObj === undefined || averagePriceObj.length == 0) {
-            return { status: 404, msg: `[${globals.serverName} @ ${currentTimePretty()}]: insufficient data on db, could not calculate avg price`}
+            Balance check
+        */
+
+        const balance = await web3.eth.getBalance(globals.walletAddress);
+        const balanceInEther = web3.utils.fromWei(balance, 'ether');
+        if(balanceInEther < 0.001) {
+            await changeTurn();
+            axios.post('http://localhost:5000/fund-me', { walletAddress: globals.walletAddress })
+            return { status: 200, msg: `[${globals.serverName} @ ${currentTimePretty()}]: not enough funds, changing order..` }
         }
-        
+
         /* 
-         * Check if the price jumped or lowered by 2% from the current contract price
-         */
+            This is the old way of getting the average price from the remote db,
+            Now we are calculating the average price from the array in memory (no more than 15 prices will be inside the array)
+         
+            */
+        // (-> DEPRICATED) Check if there is enough data on the db to calculate the average price (<- DEPRICATED)
+        // const averagePriceObj = await Price.aggregate([
+        //     { $match: { timestamp: { $gt: currentTimestamp - globals.fifteenMinutes } } },
+        //     { $group: { _id: null, avgPrice: { $avg: '$price' } } }
+        // ]);
+        // if(averagePriceObj === undefined || averagePriceObj.length == 0) {
+        //     return { status: 404, msg: `[${globals.serverName} @ ${currentTimePretty()}]: insufficient data on db, could not calculate avg price`}
+        // }
+
+        /* 
+            New way of calculating the averagePrice..
+            Since we came to these lines of code it means that the request passed the timestamp check,
+            meaning we can safely clear the gatheredPrices array once we calc. the averagePrice
+        */
+        
+       const averagePrice = calculateAveragePrice();
+       clearGatheredPrices();
+
+        /* 
+            Check if the price jumped or lowered by 2% from the current contract price
+        */
         const contractPrice = await contract.methods.getPrice().call();
-        const averagePrice = Math.floor(averagePriceObj[0].avgPrice);
         if(averagePrice < (contractPrice * 1.02) && averagePrice > (contractPrice * 0.98)) {
             await changeTurn();
             return { status: 200, msg: `[${globals.serverName} @ ${currentTimePretty()}]: average price has not changed more than 2% of the current contract price` }
         }
 
         /* 
-         * Send transaction
-         */
+            Send transaction
+        */
         const gasEstimate = await contract.methods.setEthPrice(averagePrice).estimateGas({from: globals.walletAddress});
         const txResponse = await sendTransaction(averagePrice, gasEstimate);
         await changeTurn();
@@ -137,6 +189,9 @@ module.exports = {
 
     },
 
+    /* 
+        (DEPRICATED ->) Since we no longer save prices remotely, we wont be needing this service function (<- DEPRICATED) 
+    */
     deleteOldPrices: async () => {
 
         let currentTime = timestamp.now()

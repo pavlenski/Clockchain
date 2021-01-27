@@ -37,5 +37,5 @@ async function writeContract() {
 
 for(let i = 2 ; i < serversNum ; i++) {
     scheduler.scheduleJob('* * * * *', addNewPrice.bind({ "port": process.argv[i]}));
-    scheduler.scheduleJob('*/16 * * * *', writeContract.bind({ "port": process.argv[i]}));
+    scheduler.scheduleJob('* * * * *', writeContract.bind({ "port": process.argv[i]}));
 }
