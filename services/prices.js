@@ -134,16 +134,6 @@ module.exports = {
             return { status: 200, msg: `[${globals.serverName} @ ${currentTimePretty()}]: recently updated.. next call will be possible in ${globals.fifteenMinutes - (currentTimestamp - lastTimestamp)} seconds` }
         }
 
-        // balance check
-
-        const balance = await web3.eth.getBalance(globals.walletAddress);
-        const balanceInEther = web3.utils.fromWei(balance, 'ether');
-        if(balanceInEther < 0.001) {
-            await changeTurn();
-            axios.post('http://localhost:5000/fund-me', { walletAddress: globals.walletAddress })
-            return { status: 200, msg: `[${globals.serverName} @ ${currentTimePretty()}]: not enough funds, changing order..` }
-        }
-
         /* 
             Balance check
         */
